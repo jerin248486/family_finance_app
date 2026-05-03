@@ -41,7 +41,7 @@
 
         <input type="hidden" id="method" value="Manual">
 
-        <button type="button" class="action-btn" onclick="startVoiceRecognition()">🎤 Use Voice Entry</button>
+        <button type="button" class="action-btn" id="voiceBtn" onclick="toggleVoiceRecognition()">🎤 Use Voice Entry</button>
         
         <label for="billImage" style="margin-top:15px; font-weight:bold;">📸 Scan Bill/Receipt:</label>
         <input type="file" id="billImage" accept="image/*" capture="environment">
@@ -92,56 +92,81 @@
         });
     });
 
-    // --- 3. VOICE TO TEXT ENTRY (SMART COMMANDS) ---
-    function startVoiceRecognition() {
+    // --- 3. VOICE TO TEXT ENTRY (CONTINUOUS & SMART COMMANDS) ---
+    let recognition;
+    let isListening = false;
+
+    function toggleVoiceRecognition() {
         if (!('webkitSpeechRecognition' in window)) {
             alert("Your browser does not support Voice Recognition. Please use Chrome or Safari.");
             return;
         }
-        
+
         const statusDiv = document.getElementById('status');
-        const recognition = new webkitSpeechRecognition();
-        recognition.continuous = false;
-        recognition.interimResults = false;
+        const voiceBtn = document.getElementById('voiceBtn');
+
+        // If it's already listening, clicking the button stops it manually
+        if (isListening) {
+            recognition.stop();
+            return;
+        }
+        
+        recognition = new webkitSpeechRecognition();
+        
+        // THE MAGIC FIXES: 
+        // continuous = true keeps the mic open during pauses
+        // interimResults = true lets you see the text as you speak
+        recognition.continuous = true; 
+        recognition.interimResults = true; 
+
+        let fullTranscript = "";
 
         recognition.onstart = function() {
-            statusDiv.innerText = 'Listening... Say: "Description [text] Amount [number] Category [word] Submit"';
+            isListening = true;
+            voiceBtn.innerText = "🛑 Stop Listening";
+            voiceBtn.style.backgroundColor = "#dc3545"; // Turns button red
+            statusDiv.innerText = 'Listening... Take your time! Say "Submit" when done.';
             statusDiv.style.color = "#e83e8c";
         };
 
         recognition.onresult = function(event) {
-            const transcript = event.results[0][0].transcript.toLowerCase();
-            statusDiv.innerText = `Heard: "${transcript}"`;
+            let interimTranscript = '';
+            fullTranscript = '';
+
+            // This loops through everything you've said so far and stitches it together
+            for (let i = 0; i < event.results.length; i++) {
+                if (event.results[i].isFinal) {
+                    fullTranscript += event.results[i][0].transcript + " ";
+                } else {
+                    interimTranscript += event.results[i][0].transcript;
+                }
+            }
+
+            const currentText = (fullTranscript + interimTranscript).toLowerCase();
+            statusDiv.innerText = `Heard: "${currentText}"`;
             
             // 1. Extract Description
-            // Looks for "description" and captures everything after it until it hears the next trigger word
             const descRegex = /description\s+(.*?)(?=\s+amount|\s+category|\s+submit|$)/;
-            const descMatch = transcript.match(descRegex);
+            const descMatch = currentText.match(descRegex);
             if (descMatch) {
-                // Capitalize the first letter for neatness
                 let text = descMatch[1].trim();
                 document.getElementById('description').value = text.charAt(0).toUpperCase() + text.slice(1);
             }
 
             // 2. Extract Amount
             const amountRegex = /amount\s+(.*?)(?=\s+description|\s+category|\s+submit|$)/;
-            const amountMatch = transcript.match(amountRegex);
+            const amountMatch = currentText.match(amountRegex);
             if (amountMatch) {
-                // Strips out words like "dollars" and just keeps the numbers/decimals
                 const numMatch = amountMatch[1].match(/\d+(\.\d{1,2})?/);
-                if (numMatch) {
-                    document.getElementById('amount').value = numMatch[0];
-                }
+                if (numMatch) document.getElementById('amount').value = numMatch[0];
             }
 
             // 3. Extract Category
             const categoryRegex = /category\s+(.*?)(?=\s+description|\s+amount|\s+submit|$)/;
-            const categoryMatch = transcript.match(categoryRegex);
+            const categoryMatch = currentText.match(categoryRegex);
             if (categoryMatch) {
                 const spokenCategory = categoryMatch[1].trim();
                 const selectElement = document.getElementById('category');
-                
-                // Loops through your dropdown options to find a match
                 for (let i = 0; i < selectElement.options.length; i++) {
                     if (selectElement.options[i].value.toLowerCase().includes(spokenCategory)) {
                         selectElement.selectedIndex = i;
@@ -153,20 +178,37 @@
             document.getElementById('method').value = "Voice";
 
             // 4. Auto-Submit Feature
-            if (transcript.includes("submit")) {
-                statusDiv.innerText += " (Submitting to Sheets...)";
+            if (currentText.includes("submit")) {
+                recognition.stop(); // Immediately turns off the mic
+                statusDiv.innerText = "Heard 'Submit'. Processing...";
+                statusDiv.style.color = "#007bff";
                 
-                // We add a 1-second delay so you can visually confirm the fields filled out correctly 
-                // before it whisks the data away to Google Sheets.
                 setTimeout(() => {
                     document.getElementById('financeForm').dispatchEvent(new Event('submit', { cancelable: true, bubbles: true }));
                 }, 1000); 
             }
         };
 
+        // When the microphone successfully shuts off (either manually or via "submit")
+        recognition.onend = function() {
+            isListening = false;
+            voiceBtn.innerText = "🎤 Use Voice Entry";
+            voiceBtn.style.backgroundColor = "#007bff"; // Turns button back to blue
+            
+            if (!statusDiv.innerText.includes("Processing")) {
+                statusDiv.innerText = "Microphone turned off.";
+                statusDiv.style.color = "#555";
+                setTimeout(() => { if(statusDiv.innerText === "Microphone turned off.") statusDiv.innerText = ""; }, 3000);
+            }
+        };
+
+        // Handles accidental errors without crashing
         recognition.onerror = function(event) {
-            statusDiv.innerText = "Voice recognition error. Please try again.";
-            statusDiv.style.color = "red";
+            if (event.error !== 'no-speech') {
+                statusDiv.innerText = "Voice error: " + event.error;
+                statusDiv.style.color = "red";
+                recognition.stop();
+            }
         };
 
         recognition.start();
