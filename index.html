@@ -92,10 +92,10 @@
         });
     });
 
-    // --- 3. VOICE TO TEXT ENTRY ---
+    // --- 3. VOICE TO TEXT ENTRY (SMART COMMANDS) ---
     function startVoiceRecognition() {
         if (!('webkitSpeechRecognition' in window)) {
-            alert("Your browser does not support Voice Recognition. Please use Chrome.");
+            alert("Your browser does not support Voice Recognition. Please use Chrome or Safari.");
             return;
         }
         
@@ -105,7 +105,7 @@
         recognition.interimResults = false;
 
         recognition.onstart = function() {
-            statusDiv.innerText = "Listening... Try saying 'Groceries 50 dollars'";
+            statusDiv.innerText = 'Listening... Say: "Description [text] Amount [number] Category [word] Submit"';
             statusDiv.style.color = "#e83e8c";
         };
 
@@ -113,18 +113,60 @@
             const transcript = event.results[0][0].transcript.toLowerCase();
             statusDiv.innerText = `Heard: "${transcript}"`;
             
-            // Basic logic to extract numbers and text
-            const amountMatch = transcript.match(/\d+(\.\d{1,2})?/); 
-            const amount = amountMatch ? amountMatch[0] : "";
-            const textOnly = transcript.replace(/\d+(\.\d{1,2})?|dollars|bucks/g, "").trim();
+            // 1. Extract Description
+            // Looks for "description" and captures everything after it until it hears the next trigger word
+            const descRegex = /description\s+(.*?)(?=\s+amount|\s+category|\s+submit|$)/;
+            const descMatch = transcript.match(descRegex);
+            if (descMatch) {
+                // Capitalize the first letter for neatness
+                let text = descMatch[1].trim();
+                document.getElementById('description').value = text.charAt(0).toUpperCase() + text.slice(1);
+            }
 
-            document.getElementById('description').value = textOnly || transcript;
-            document.getElementById('amount').value = amount;
+            // 2. Extract Amount
+            const amountRegex = /amount\s+(.*?)(?=\s+description|\s+category|\s+submit|$)/;
+            const amountMatch = transcript.match(amountRegex);
+            if (amountMatch) {
+                // Strips out words like "dollars" and just keeps the numbers/decimals
+                const numMatch = amountMatch[1].match(/\d+(\.\d{1,2})?/);
+                if (numMatch) {
+                    document.getElementById('amount').value = numMatch[0];
+                }
+            }
+
+            // 3. Extract Category
+            const categoryRegex = /category\s+(.*?)(?=\s+description|\s+amount|\s+submit|$)/;
+            const categoryMatch = transcript.match(categoryRegex);
+            if (categoryMatch) {
+                const spokenCategory = categoryMatch[1].trim();
+                const selectElement = document.getElementById('category');
+                
+                // Loops through your dropdown options to find a match
+                for (let i = 0; i < selectElement.options.length; i++) {
+                    if (selectElement.options[i].value.toLowerCase().includes(spokenCategory)) {
+                        selectElement.selectedIndex = i;
+                        break;
+                    }
+                }
+            }
+
             document.getElementById('method').value = "Voice";
+
+            // 4. Auto-Submit Feature
+            if (transcript.includes("submit")) {
+                statusDiv.innerText += " (Submitting to Sheets...)";
+                
+                // We add a 1-second delay so you can visually confirm the fields filled out correctly 
+                // before it whisks the data away to Google Sheets.
+                setTimeout(() => {
+                    document.getElementById('financeForm').dispatchEvent(new Event('submit', { cancelable: true, bubbles: true }));
+                }, 1000); 
+            }
         };
 
         recognition.onerror = function(event) {
             statusDiv.innerText = "Voice recognition error. Please try again.";
+            statusDiv.style.color = "red";
         };
 
         recognition.start();
