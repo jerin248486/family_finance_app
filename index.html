@@ -25,6 +25,8 @@
         .budget-item { display: flex; justify-content: space-between; padding: 8px; border-bottom: 1px solid #eee; font-size: 0.9em;}
         .item-inc { color: #155724; font-weight: bold;}
         .item-exp { color: #721c24; font-weight: bold;}
+        .btn-delete { background: none; border: none; color: #dc3545; cursor: pointer; font-size: 1.1em; padding: 0 5px; margin-top: 0; width: auto; }
+        .btn-delete:hover { transform: scale(1.2); }
     </style>
 </head>
 <body>
@@ -214,13 +216,45 @@
             let amount = parseFloat(rawExpected[i][2]).toFixed(2);
             let colorClass = type === "Income" ? "item-inc" : "item-exp";
             
+            // Notice the new flex-grow and delete button here
             listDiv.innerHTML += `
-                <div class="budget-item">
-                    <span>${name} <small style="color:#888;">(${type})</small></span>
-                    <span class="${colorClass}">$${amount}</span>
+                <div class="budget-item" style="align-items: center;">
+                    <span style="flex-grow: 1;">${name} <small style="color:#888;">(${type})</small></span>
+                    <span class="${colorClass}" style="margin-right: 15px;">$${amount}</span>
+                    <button type="button" class="btn-delete" onclick="deleteBudgetItem('${name}', '${type}')" title="Delete">❌</button>
                 </div>
             `;
         }
+    }
+
+    // --- NEW: DELETE BUDGET ITEM ---
+    function deleteBudgetItem(name, type) {
+        // Double check before deleting
+        if (!confirm(`Are you sure you want to delete '${name}' from your expected budget?`)) {
+            return; 
+        }
+        
+        const listDiv = document.getElementById('budgetList');
+        listDiv.innerHTML = "<div style='text-align:center; color:#777; padding: 10px;'>Deleting...</div>";
+
+        fetch(GOOGLE_SCRIPT_URL, {
+            method: 'POST',
+            mode: 'no-cors',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                action: 'deleteBudget',
+                name: name,
+                type: type
+            })
+        }).then(() => {
+            // Wait 1 second to give Google Sheets time to process, then refresh the dashboard
+            setTimeout(() => {
+                fetchData(); 
+            }, 1000);
+        }).catch(err => {
+            alert("Error deleting item.");
+            fetchData();
+        });
     }
 
     // --- 1. SUBMIT TRANSACTION FORM ---
