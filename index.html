@@ -3,256 +3,271 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Family Finance Tracker</title>
-    <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
+    <title>Dynamic Finance Tracker</title>
     <style>
-        body { font-family: Arial, sans-serif; max-width: 500px; margin: 20px auto; padding: 20px; background: #f4f7f6; }
-        .card { background: white; padding: 20px; border-radius: 8px; box-shadow: 0 4px 8px rgba(0,0,0,0.1); }
-        h2 { text-align: center; color: #333; }
-        label { font-weight: bold; display: block; margin-top: 15px; }
+        body { font-family: Arial, sans-serif; max-width: 500px; margin: 20px auto; padding: 10px; background: #f4f7f6; }
+        .card { background: white; padding: 20px; border-radius: 8px; box-shadow: 0 4px 8px rgba(0,0,0,0.1); margin-bottom: 20px; }
+        h2, h3 { text-align: center; color: #333; margin-top: 0; }
+        label { font-weight: bold; display: block; margin-top: 10px; font-size: 0.9em;}
         input, select { width: 100%; padding: 10px; margin-top: 5px; border: 1px solid #ccc; border-radius: 4px; box-sizing: border-box; }
-        button { width: 100%; padding: 12px; margin-top: 20px; background: #28a745; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 16px; }
-        button:hover { background: #218838; }
-        .action-btn { background: #007bff; margin-top: 10px; }
-        .action-btn:hover { background: #0056b3; }
-        #status { margin-top: 15px; text-align: center; font-weight: bold; color: #555; }
+        button { width: 100%; padding: 12px; margin-top: 20px; background: #28a745; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 16px; font-weight: bold;}
+        .dates { display: flex; gap: 10px; margin-bottom: 15px; }
+        .dates div { flex: 1; }
+        .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; text-align: center; margin-top: 15px;}
+        .box { padding: 10px; border-radius: 6px; background: #f8f9fa; border: 1px solid #ddd; }
+        .box span { display: block; font-size: 1.2em; font-weight: bold; margin-top: 5px;}
+        .highlight-box { grid-column: span 2; padding: 15px; border-radius: 6px; border: 2px solid; margin-top: 5px;}
+        .highlight-box span { font-size: 1.5em; font-weight: bold; display: block; margin-top: 5px; }
+        .status { margin-top: 15px; text-align: center; font-weight: bold; }
+        
+        /* Styles for the Budget List */
+        .budget-list { margin-top: 15px; border-top: 1px solid #eee; padding-top: 15px;}
+        .budget-item { display: flex; justify-content: space-between; padding: 8px; border-bottom: 1px solid #eee; font-size: 0.9em;}
+        .item-inc { color: #155724; font-weight: bold;}
+        .item-exp { color: #721c24; font-weight: bold;}
     </style>
 </head>
 <body>
 
 <div class="card">
-    <h2>Family Finance Tracker</h2>
-    
+    <h2>Budget Dashboard</h2>
+    <div class="dates">
+        <div>
+            <label>Select Month</label>
+            <select id="viewMonth" onchange="calculateDashboard()">
+                <option value="All">Entire Year</option>
+                <option value="0">January</option><option value="1">February</option><option value="2">March</option>
+                <option value="3">April</option><option value="4">May</option><option value="5">June</option>
+                <option value="6">July</option><option value="7">August</option><option value="8">September</option>
+                <option value="9">October</option><option value="10">November</option><option value="11">December</option>
+            </select>
+        </div>
+        <div>
+            <label>Select Year</label>
+            <select id="viewYear" onchange="calculateDashboard()">
+                <option value="2026">2026</option><option value="2027">2027</option>
+            </select>
+        </div>
+    </div>
+
+    <div class="grid">
+        <div class="box">Budgeted Income<span id="projInc">$0</span></div>
+        <div class="box">Actual Income<span id="actInc">$0</span></div>
+        <div class="box">Budgeted Expenses<span id="projExp">$0</span></div>
+        <div class="box">Actual Expenses<span id="actExp">$0</span></div>
+        
+        <div class="highlight-box" id="surplusBox">
+            Actual Surplus / Shortfall
+            <div style="font-size: 0.8em; font-weight: normal;">(Real Income - Real Expenses)</div>
+            <span id="netSafe">$0</span>
+        </div>
+
+        <div class="highlight-box" id="remainingBox">
+            Remaining Expense Budget
+            <div style="font-size: 0.8em; font-weight: normal;">(Budgeted Expenses - Real Expenses)</div>
+            <span id="remainingBudget">$0</span>
+        </div>
+    </div>
+</div>
+
+<div class="card">
+    <h3>Log Transaction</h3>
     <form id="financeForm">
-        <label for="description">Description:</label>
-        <input type="text" id="description" placeholder="E.g., Groceries at Target" required>
-
-        <label for="amount">Amount ($):</label>
-        <input type="number" step="0.01" id="amount" placeholder="0.00" required>
-
-        <label for="category">Category:</label>
-        <select id="category">
-            <option value="Groceries">Groceries</option>
-            <option value="Utilities">Utilities</option>
-            <option value="Entertainment">Entertainment</option>
-            <option value="Dining Out">Dining Out</option>
-            <option value="Other">Other</option>
+        <label>Transaction Type:</label>
+        <select id="transType">
+            <option value="Expense">Expense</option>
+            <option value="Income">Income</option>
         </select>
-
-        <input type="hidden" id="method" value="Manual">
-
-        <button type="button" class="action-btn" id="voiceBtn" onclick="toggleVoiceRecognition()">🎤 Use Voice Entry</button>
-        
-        <label for="billImage" style="margin-top:15px; font-weight:bold;">📸 Scan Bill/Receipt:</label>
-        <input type="file" id="billImage" accept="image/*" capture="environment">
-        
-        <button type="submit">Submit Expense</button>
+        <label>Description:</label>
+        <input type="text" id="description" placeholder="E.g., Target run" required>
+        <label>Amount ($):</label>
+        <input type="number" step="0.01" id="amount" placeholder="0.00" required>
+        <label>Category:</label>
+        <input type="text" id="category" list="catList" required>
+        <datalist id="catList">
+            <option value="Groceries"><option value="Utilities"><option value="Paycheck"><option value="Dining Out">
+        </datalist>
+        <button type="submit">Log Transaction</button>
     </form>
+    <div id="statusLog" class="status"></div>
+</div>
 
-    <div id="status"></div>
+<div class="card">
+    <h3>Manage Monthly Budget</h3>
+    <form id="budgetForm">
+        <label>Type:</label>
+        <select id="budgetType">
+            <option value="Income">Expected Income</option>
+            <option value="Expense">Expected Expense</option>
+        </select>
+        <label>Name / Category:</label>
+        <input type="text" id="budgetName" placeholder="E.g., Rent, Salary, Netflix" required>
+        <label>Monthly Amount ($):</label>
+        <input type="number" step="0.01" id="budgetAmount" placeholder="0.00" required>
+        <button type="submit" style="background:#007bff;">Save Budget Item</button>
+    </form>
+    <div id="statusBudget" class="status"></div>
+
+    <div class="budget-list" id="budgetList">
+        <div style="text-align: center; color: #777;">Loading current budget...</div>
+    </div>
 </div>
 
 <script>
-    // --- 1. GOOGLE SHEETS CONNECTION ---
-    // PASTE YOUR WEB APP URL HERE:
-    const GOOGLE_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbxZ0Nim7nUbJBF3mZpmu1pqOFgYl9PFctZlpm8BOf-MB8-YvF9gSPzwpLR1icodK_64/exec';
+    // --- PASTE YOUR WEB APP URL HERE ---
+    const GOOGLE_SCRIPT_URL = 'YOUR_GOOGLE_WEB_APP_URL_HERE';
 
-    // --- 2. SUBMIT DATA TO GOOGLE SHEETS ---
+    let rawActuals = [];
+    let rawExpected = [];
+
+    window.onload = function() {
+        const now = new Date();
+        document.getElementById('viewMonth').value = now.getMonth().toString();
+        document.getElementById('viewYear').value = now.getFullYear().toString();
+        fetchData();
+    };
+
+    function fetchData() {
+        fetch(GOOGLE_SCRIPT_URL)
+            .then(res => res.json())
+            .then(data => {
+                rawActuals = data.actuals;
+                rawExpected = data.expected;
+                calculateDashboard();
+                renderBudgetList();
+            }).catch(err => console.error(err));
+    }
+
+    function calculateDashboard() {
+        if (!rawActuals.length || !rawExpected.length) return;
+
+        const selectedMonth = document.getElementById('viewMonth').value; 
+        const selectedYear = parseInt(document.getElementById('viewYear').value);
+
+        let actInc = 0, actExp = 0, projInc = 0, projExp = 0;
+
+        for (let i = 1; i < rawActuals.length; i++) {
+            let rowDate = new Date(rawActuals[i][0]);
+            let type = rawActuals[i][1];
+            let amount = parseFloat(rawActuals[i][3]) || 0;
+
+            if (rowDate.getFullYear() === selectedYear) {
+                if (selectedMonth === "All" || rowDate.getMonth() === parseInt(selectedMonth)) {
+                    if (type === "Income") actInc += amount;
+                    if (type === "Expense") actExp += amount;
+                }
+            }
+        }
+
+        let multiplier = (selectedMonth === "All") ? 12 : 1;
+        for (let i = 1; i < rawExpected.length; i++) {
+            let type = rawExpected[i][1];
+            let amount = parseFloat(rawExpected[i][2]) || 0; 
+            if (type === "Income") projInc += (amount * multiplier);
+            if (type === "Expense") projExp += (amount * multiplier);
+        }
+
+        document.getElementById('projInc').innerText = "$" + projInc.toFixed(0);
+        document.getElementById('actInc').innerText = "$" + actInc.toFixed(0);
+        document.getElementById('projExp').innerText = "$" + projExp.toFixed(0);
+        document.getElementById('actExp').innerText = "$" + actExp.toFixed(0);
+
+        let surplus = actInc - actExp;
+        const surplusBox = document.getElementById('surplusBox');
+        document.getElementById('netSafe').innerText = "$" + surplus.toFixed(2);
+        
+        if (surplus < 0) {
+            surplusBox.style.backgroundColor = "#f8d7da"; surplusBox.style.borderColor = "#f5c6cb";
+            document.getElementById('netSafe').style.color = "#721c24";
+        } else {
+            surplusBox.style.backgroundColor = "#d4edda"; surplusBox.style.borderColor = "#c3e6cb";
+            document.getElementById('netSafe').style.color = "#155724";
+        }
+
+        let remaining = projExp - actExp;
+        const remainingBox = document.getElementById('remainingBox');
+        document.getElementById('remainingBudget').innerText = "$" + remaining.toFixed(2);
+
+        if (remaining < 0) {
+            remainingBox.style.backgroundColor = "#fff3cd"; remainingBox.style.borderColor = "#ffeeba";
+            document.getElementById('remainingBudget').style.color = "#856404";
+            document.getElementById('remainingBudget').innerText += " (Overspent!)";
+        } else {
+            remainingBox.style.backgroundColor = "#e2e3e5"; remainingBox.style.borderColor = "#d6d8db";
+            document.getElementById('remainingBudget').style.color = "#383d41";
+        }
+    }
+
+    // --- RENDER CURRENT BUDGET LIST ---
+    function renderBudgetList() {
+        const listDiv = document.getElementById('budgetList');
+        listDiv.innerHTML = "<h4>Current Set Budget</h4>";
+        
+        if (rawExpected.length <= 1) {
+            listDiv.innerHTML += "<div style='text-align:center; color:#777;'>No budget items set yet.</div>";
+            return;
+        }
+
+        for (let i = 1; i < rawExpected.length; i++) {
+            let name = rawExpected[i][0];
+            let type = rawExpected[i][1];
+            let amount = parseFloat(rawExpected[i][2]).toFixed(2);
+            let colorClass = type === "Income" ? "item-inc" : "item-exp";
+            
+            listDiv.innerHTML += `
+                <div class="budget-item">
+                    <span>${name} <small style="color:#888;">(${type})</small></span>
+                    <span class="${colorClass}">$${amount}</span>
+                </div>
+            `;
+        }
+    }
+
+    // --- 1. SUBMIT TRANSACTION FORM ---
     document.getElementById('financeForm').addEventListener('submit', function(e) {
         e.preventDefault();
-        
-        const statusDiv = document.getElementById('status');
-        statusDiv.innerText = "Submitting to Google Sheets...";
-        statusDiv.style.color = "#007bff";
-
-        const expenseData = {
+        submitData('statusLog', 'financeForm', {
+            action: 'logTransaction',
+            type: document.getElementById('transType').value,
             description: document.getElementById('description').value,
             amount: document.getElementById('amount').value,
-            category: document.getElementById('category').value,
-            method: document.getElementById('method').value
-        };
+            category: document.getElementById('category').value
+        });
+    });
+
+    // --- 2. SUBMIT BUDGET FORM ---
+    document.getElementById('budgetForm').addEventListener('submit', function(e) {
+        e.preventDefault();
+        submitData('statusBudget', 'budgetForm', {
+            action: 'updateBudget',
+            type: document.getElementById('budgetType').value,
+            name: document.getElementById('budgetName').value,
+            amount: document.getElementById('budgetAmount').value
+        });
+    });
+
+    // --- REUSABLE SUBMIT FUNCTION ---
+    function submitData(statusId, formId, payload) {
+        const statusDiv = document.getElementById(statusId);
+        statusDiv.innerText = "Saving...";
+        statusDiv.style.color = "#333";
 
         fetch(GOOGLE_SCRIPT_URL, {
             method: 'POST',
-            mode: 'no-cors', // Required for simple Apps Script POSTs from a browser
-            headers: {
-                'Content-Type': 'application/json'
-            },
-            body: JSON.stringify(expenseData)
+            mode: 'no-cors',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload)
         }).then(() => {
-            statusDiv.innerText = "✅ Expense Logged Successfully!";
+            statusDiv.innerText = "✅ Saved!";
             statusDiv.style.color = "green";
-            document.getElementById('financeForm').reset();
-            document.getElementById('method').value = "Manual"; // Reset method
+            document.getElementById(formId).reset();
             setTimeout(() => statusDiv.innerText = "", 3000);
-        }).catch(error => {
-            statusDiv.innerText = "❌ Error logging expense.";
-            statusDiv.style.color = "red";
-            console.error('Error!', error.message);
-        });
-    });
-
-    // --- 3. VOICE TO TEXT ENTRY (CONTINUOUS & SMART COMMANDS) ---
-    let recognition;
-    let isListening = false;
-
-    function toggleVoiceRecognition() {
-        if (!('webkitSpeechRecognition' in window)) {
-            alert("Your browser does not support Voice Recognition. Please use Chrome or Safari.");
-            return;
-        }
-
-        const statusDiv = document.getElementById('status');
-        const voiceBtn = document.getElementById('voiceBtn');
-
-        // If it's already listening, clicking the button stops it manually
-        if (isListening) {
-            recognition.stop();
-            return;
-        }
-        
-        recognition = new webkitSpeechRecognition();
-        
-        // THE MAGIC FIXES: 
-        // continuous = true keeps the mic open during pauses
-        // interimResults = true lets you see the text as you speak
-        recognition.continuous = true; 
-        recognition.interimResults = true; 
-
-        let fullTranscript = "";
-
-        recognition.onstart = function() {
-            isListening = true;
-            voiceBtn.innerText = "🛑 Stop Listening";
-            voiceBtn.style.backgroundColor = "#dc3545"; // Turns button red
-            statusDiv.innerText = 'Listening... Take your time! Say "Submit" when done.';
-            statusDiv.style.color = "#e83e8c";
-        };
-
-        recognition.onresult = function(event) {
-            let interimTranscript = '';
-            fullTranscript = '';
-
-            // This loops through everything you've said so far and stitches it together
-            for (let i = 0; i < event.results.length; i++) {
-                if (event.results[i].isFinal) {
-                    fullTranscript += event.results[i][0].transcript + " ";
-                } else {
-                    interimTranscript += event.results[i][0].transcript;
-                }
-            }
-
-            const currentText = (fullTranscript + interimTranscript).toLowerCase();
-            statusDiv.innerText = `Heard: "${currentText}"`;
-            
-            // 1. Extract Description
-            const descRegex = /description\s+(.*?)(?=\s+amount|\s+category|\s+submit|$)/;
-            const descMatch = currentText.match(descRegex);
-            if (descMatch) {
-                let text = descMatch[1].trim();
-                document.getElementById('description').value = text.charAt(0).toUpperCase() + text.slice(1);
-            }
-
-            // 2. Extract Amount
-            const amountRegex = /amount\s+(.*?)(?=\s+description|\s+category|\s+submit|$)/;
-            const amountMatch = currentText.match(amountRegex);
-            if (amountMatch) {
-                const numMatch = amountMatch[1].match(/\d+(\.\d{1,2})?/);
-                if (numMatch) document.getElementById('amount').value = numMatch[0];
-            }
-
-            // 3. Extract Category
-            const categoryRegex = /category\s+(.*?)(?=\s+description|\s+amount|\s+submit|$)/;
-            const categoryMatch = currentText.match(categoryRegex);
-            if (categoryMatch) {
-                const spokenCategory = categoryMatch[1].trim();
-                const selectElement = document.getElementById('category');
-                for (let i = 0; i < selectElement.options.length; i++) {
-                    if (selectElement.options[i].value.toLowerCase().includes(spokenCategory)) {
-                        selectElement.selectedIndex = i;
-                        break;
-                    }
-                }
-            }
-
-            document.getElementById('method').value = "Voice";
-
-            // 4. Auto-Submit Feature
-            if (currentText.includes("submit")) {
-                recognition.stop(); // Immediately turns off the mic
-                statusDiv.innerText = "Heard 'Submit'. Processing...";
-                statusDiv.style.color = "#007bff";
-                
-                setTimeout(() => {
-                    document.getElementById('financeForm').dispatchEvent(new Event('submit', { cancelable: true, bubbles: true }));
-                }, 1000); 
-            }
-        };
-
-        // When the microphone successfully shuts off (either manually or via "submit")
-        recognition.onend = function() {
-            isListening = false;
-            voiceBtn.innerText = "🎤 Use Voice Entry";
-            voiceBtn.style.backgroundColor = "#007bff"; // Turns button back to blue
-            
-            if (!statusDiv.innerText.includes("Processing")) {
-                statusDiv.innerText = "Microphone turned off.";
-                statusDiv.style.color = "#555";
-                setTimeout(() => { if(statusDiv.innerText === "Microphone turned off.") statusDiv.innerText = ""; }, 3000);
-            }
-        };
-
-        // Handles accidental errors without crashing
-        recognition.onerror = function(event) {
-            if (event.error !== 'no-speech') {
-                statusDiv.innerText = "Voice error: " + event.error;
-                statusDiv.style.color = "red";
-                recognition.stop();
-            }
-        };
-
-        recognition.start();
-    }
-
-    // --- 4. SCAN BILL / OCR (Tesseract.js) ---
-    document.getElementById('billImage').addEventListener('change', function(e) {
-        const file = e.target.files[0];
-        if (!file) return;
-
-        const statusDiv = document.getElementById('status');
-        statusDiv.innerText = "Scanning receipt... Please wait.";
-        statusDiv.style.color = "#fd7e14";
-
-        Tesseract.recognize(
-            file,
-            'eng',
-            { logger: m => console.log(m) } // Logs progress in browser console
-        ).then(({ data: { text } }) => {
-            statusDiv.innerText = "Scan complete! Trying to extract total...";
-            
-            // Basic attempt to find a total amount in the receipt text
-            // Looks for "Total", "Amount", etc., followed by a dollar sign and numbers
-            const totalRegex = /(?:total|amount|due|balance)[\s:$-]*(\d+\.\d{2})/i;
-            const match = text.match(totalRegex);
-
-            if (match && match[1]) {
-                document.getElementById('amount').value = match[1];
-                document.getElementById('description').value = "Scanned Receipt";
-                statusDiv.innerText = "✅ Total found! Please verify.";
-                statusDiv.style.color = "green";
-            } else {
-                // If it can't confidently find a total, it dumps a snippet of text for manual review
-                document.getElementById('description').value = text.substring(0, 50).replace(/\n/g, ' ') + "...";
-                statusDiv.innerText = "Could not find an exact total. Please enter manually.";
-                statusDiv.style.color = "#fd7e14";
-            }
-            document.getElementById('method').value = "Scanned";
+            fetchData(); // Refresh the dashboard and budget list
         }).catch(err => {
-            statusDiv.innerText = "❌ Error scanning receipt.";
-            console.error(err);
+            statusDiv.innerText = "❌ Error saving.";
+            statusDiv.style.color = "red";
         });
-    });
+    }
 </script>
-
 </body>
 </html>
